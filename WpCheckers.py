@@ -106,7 +106,7 @@ def check(line, separator):
             result = (f"[\033[1;33m{current_time}{reset}] - [\033[1;37m{site}{reset}] - "
                       f"[\033[1;34m{user}{reset}] - [\033[1;34m{passwd}{reset}] - [\033[1;32mSuccess Logged in{reset}]")
             print(result)
-            with open("Xz_Good_WP.txt", "a", encoding="utf-8") as good_file:
+            with open("Good_WP.txt", "a", encoding="utf-8") as good_file:
                 good_file.write(f"{site}|{user}|{passwd}\n")
         else:
             result = (f"[\033[1;33m{current_time}{reset}] - [\033[1;37m{site}{reset}] - "
